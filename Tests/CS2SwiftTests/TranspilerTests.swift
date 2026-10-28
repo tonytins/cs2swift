@@ -270,3 +270,13 @@ func unsupportedConstructsAreErrors(csharp: String, message: String) {
     let source = "    public static int F(int a, float b) => (int)(a + b);"
     #expect(swift(source).code == swift(source).code)
 }
+
+@Test func publicClassesWithoutConstructorsGetAPublicInit() {
+    expectSwift("public sealed class Panel\n{\n    private int _x;\n}\n", contains: ["    public init() {}\n}"], wrap: false)
+    #expect(!swift("public sealed class Panel\n{\n    public Panel(int x) { }\n}\n", wrap: false).code.contains("public init() {}"))
+}
+
+@Test func typesNamedLikeRaylibsAreFlagged() {
+    let output = swift("public sealed class Camera\n{\n}\n", wrap: false)
+    #expect(output.warnings.contains { $0.contains("shares its name with raylib's") })
+}

@@ -105,6 +105,9 @@ final class Emitter {
             throw TranspileError(declaration.location, "internal error: no symbols for \(qualified)")
         }
         emitComments(declaration.comments, indent: indent)
+        if typeStack.isEmpty, RaylibData.structs[declaration.name] != nil || RaylibData.aliases[declaration.name] != nil {
+            warn(declaration.location, "\(declaration.name) shares its name with raylib's; code that imports both must qualify it with this module's name")
+        }
         let access = access(declaration.modifiers, location: declaration.location)
         let bases = declaration.bases.compactMap(\.name).filter { symbols.type(named: $0)?.kind == .interface }
         for base in declaration.bases where base.name.map({ symbols.type(named: $0)?.kind != .interface }) ?? true {
@@ -154,6 +157,13 @@ final class Emitter {
             if !first { output += "\n" }
             first = false
             try emitMember(member, in: declaration, indent: indent + "    ")
+        }
+        // C# gives a class without constructors a public one; Swift's implicit init is
+        // internal, so other modules couldn't create it.
+        let hasConstructor = declaration.members.contains { if case .constructor = $0 { true } else { false } }
+        if declaration.kind == .class, !declaration.modifiers.contains("static"), access == "public ", !hasConstructor {
+            if !first { output += "\n" }
+            line(indent + "    ", "public init() {}")
         }
         line(indent, "}")
     }
