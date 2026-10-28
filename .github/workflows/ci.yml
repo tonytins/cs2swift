@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    # Weekly, to catch CityLimits or raylib-swift changes that break the translation.
+    - cron: "0 6 * * 1"
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: swift-actions/setup-swift@v2
+        if: runner.os == 'Linux'
+        with:
+          swift-version: "6.2"
+      - run: swift build
+      - run: swift test
+
+  citylimits:
+    runs-on: ubuntu-24.04
+    container: swift:6.2-noble
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install X11 and GL headers
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends git python3 ca-certificates \
+            libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev libgl1-mesa-dev
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Check out CityLimits, raylib-swift, and Raylib-cs
+        run: |
+          git clone --depth 1 https://github.com/tonytins/citylimits ../citylimits
+          git clone --depth 1 https://github.com/tonytins/raylib-swift ../raylib-swift
+          git clone --depth 1 --branch v8.1.0 https://github.com/raylib-cs/raylib-cs ../raylib-cs
+      - name: Raylib data is current
+        run: |
+          scripts/generate-raylib-data.py ../raylib-swift ../raylib-cs
+          git diff --exit-code Sources/CS2Swift/Generated
+      - name: Translate and build CityLimits' interface files
+        run: scripts/check-citylimits.sh ../citylimits ../raylib-swift ../citylimits-check
